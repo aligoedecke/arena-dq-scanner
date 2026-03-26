@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arena Disqualification Scanner</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap');
+  :root {
+    --bg:#1a1a1a; --surface:#252525; --surface2:#2e2e2e; --border:#333;
+    --accent:#FF6B35; --accent-hover:#ff7d4d; --accent-dim:rgba(255,107,53,.15);
+    --text:#fff; --text-secondary:#999; --text-muted:#555;
+    --red:#ff4444; --red-dim:rgba(255,68,68,.12);
+    --yellow:#f5a623; --yellow-dim:rgba(245,166,35,.12);
+    --blue:#4a9eff; --blue-dim:rgba(74,158,255,.12);
+    --green:#2ecc71;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:'DM Sans',-apple-system,sans-serif;font-size:14px;min-height:100vh;line-height:1.5;}
+  .topbar{background:#111;border-bottom:1px solid var(--border);padding:0 24px;height:52px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+  .topbar-left{display:flex;align-items:center;gap:16px;}
+  .nt-logo{color:var(--accent);font-weight:600;font-size:15px;}
+  .topbar-div{width:1px;height:20px;background:var(--border);}
+  .topbar-title{font-size:14px;color:var(--text-secondary);}
+  .pill{background:var(--accent);color:#fff;padding:5px 14px;border-radius:100px;font-size:12px;font-weight:500;}
+  .main{padding:32px 28px;max-width:1100px;margin:0 auto;}
+  .page-header{margin-bottom:24px;}
+  .page-header h1{font-size:24px;font-weight:500;margin-bottom:4px;}
+  .page-header p{color:var(--text-secondary);font-size:14px;}
+  .info-banner{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);border-radius:8px;padding:14px 18px;margin-bottom:20px;font-size:13px;color:var(--text-secondary);line-height:1.7;}
+  .info-banner strong{color:var(--text);font-weight:500;}
+  .info-banner code{background:var(--surface2);padding:1px 6px;border-radius:3px;font-family:monospace;font-size:12px;color:var(--accent);}
+  .signals-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:24px;}
+  @media(max-width:700px){.signals-grid{grid-template-columns:repeat(2,1fr);}}
+  .signal-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;}
+  .signal-label{font-size:10px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
+  .signal-desc{font-size:12px;color:var(--text-secondary);line-height:1.4;}
+  .upload-zone{background:var(--surface);border:2px dashed var(--border);border-radius:8px;padding:36px 24px;text-align:center;cursor:pointer;transition:all .15s;margin-bottom:16px;position:relative;}
+  .upload-zone:hover,.upload-zone.drag-over{border-color:var(--accent);background:rgba(255,107,53,.04);}
+  .upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+  .upload-title{font-size:15px;font-weight:500;margin-bottom:4px;}
+  .upload-sub{font-size:13px;color:var(--text-secondary);}
+  .upload-sub span{color:var(--accent);}
+  .file-loaded{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--green);border-radius:8px;padding:14px 18px;margin-bottom:16px;}
+  .file-info{flex:1;}
+  .file-name{font-size:14px;font-weight:500;}
+  .file-meta{font-size:12px;color:var(--text-secondary);margin-top:2px;}
+  .clear-btn{background:transparent;border:1px solid var(--border);border-radius:100px;color:var(--text-muted);font-family:'DM Sans',sans-serif;font-size:12px;padding:4px 12px;cursor:pointer;transition:all .15s;}
+  .clear-btn:hover{border-color:var(--red);color:var(--red);}
+  .scan-btn{width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:100px;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:600;cursor:pointer;transition:background .15s;margin-bottom:20px;display:flex;align-items:center;justify-content:center;gap:8px;}
+  .scan-btn:hover{background:var(--accent-hover);}
+  .scan-btn:disabled{background:var(--surface2);color:var(--text-muted);cursor:not-allowed;}
+  .status-bar{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:24px;font-size:13px;color:var(--text-secondary);min-height:44px;}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--text-muted);flex-shrink:0;}
+  .dot.active{background:var(--accent);animation:pulse 1s infinite;}
+  .dot.done{background:var(--green);}
+  .dot.error{background:var(--red);}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;}
+  @media(max-width:640px){.summary-grid{grid-template-columns:repeat(2,1fr);}}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:16px 20px;}
+  .stat-num{font-size:28px;font-weight:500;line-height:1;margin-bottom:4px;}
+  .stat-num.red{color:var(--red);} .stat-num.yellow{color:var(--yellow);} .stat-num.blue{color:var(--blue);} .stat-num.muted{color:var(--text-muted);}
+  .stat-label{font-size:12px;color:var(--text-secondary);}
+  .stat-sub{font-size:11px;color:var(--text-muted);margin-top:2px;}
+  .results-actions{display:flex;gap:10px;margin-bottom:20px;}
+  .export-btn{padding:9px 18px;background:var(--accent);color:#fff;border:none;border-radius:100px;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:background .15s;display:flex;align-items:center;gap:6px;}
+  .export-btn:hover{background:var(--accent-hover);}
+  .copy-btn{background:transparent;border:1px solid var(--border);border-radius:100px;color:var(--text-secondary);font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;padding:5px 14px;cursor:pointer;transition:all .15s;}
+  .copy-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:20px;}
+  .tab{padding:10px 18px;font-size:13px;font-weight:500;color:var(--text-secondary);cursor:pointer;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .15s;background:none;font-family:'DM Sans',sans-serif;display:flex;align-items:center;gap:8px;}
+  .tab:hover{color:var(--text);}
+  .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+  .tab-count{padding:1px 7px;border-radius:100px;font-size:11px;font-weight:600;}
+  .tab-count.red{background:var(--red-dim);color:var(--red);}
+  .tab-count.yellow{background:var(--yellow-dim);color:var(--yellow);}
+  .tab-count.blue{background:var(--blue-dim);color:var(--blue);}
+  .flag-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:10px;overflow:hidden;}
+  .flag-header{display:flex;align-items:flex-start;justify-content:space-between;padding:14px 18px;gap:12px;border-bottom:1px solid var(--border);}
+  .flag-title{font-size:14px;font-weight:500;}
+  .flag-signal{font-size:11px;color:var(--text-muted);margin-top:3px;}
+  .badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:100px;font-size:11px;font-weight:600;white-space:nowrap;flex-shrink:0;margin-top:2px;}
+  .badge.dq{background:var(--red-dim);color:var(--red);}
+  .badge.review{background:var(--yellow-dim);color:var(--yellow);}
+  .badge.artifact{background:var(--blue-dim);color:var(--blue);}
+  .flag-reason{padding:10px 18px;font-size:13px;color:var(--text-secondary);line-height:1.5;border-bottom:1px solid var(--border);}
+  .entries-table{width:100%;border-collapse:collapse;font-size:12px;}
+  .entries-table th{text-align:left;padding:8px 18px;color:var(--text-muted);font-weight:500;font-size:11px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);background:var(--surface2);}
+  .entries-table td{padding:9px 18px;color:var(--text-secondary);border-bottom:1px solid rgba(51,51,51,.5);font-size:12px;}
+  .entries-table tr:last-child td{border-bottom:none;}
+  .entries-table tr:hover td{background:rgba(255,255,255,.02);}
+  .flag-action{padding:10px 18px;font-size:12px;color:var(--accent);background:var(--accent-dim);}
+  .flag-action::before{content:'→ ';}
+  .empty-state{text-align:center;padding:48px 24px;color:var(--text-muted);font-size:13px;background:var(--surface);border:1px solid var(--border);border-radius:8px;}
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;}
+  .pnl-pos{color:var(--green);} .pnl-neg{color:var(--red);}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-left">
+    <span class="nt-logo">NT</span>
+    <div class="topbar-div"></div>
+    <span class="topbar-title">Arena Disqualification (DQ) Scanner</span>
+  </div>
+  <div class="pill">Internal Tool</div>
+</div>
+
+<div class="main">
+  <div class="page-header">
+    <h1>Multi-Entry Detection</h1>
+    <p>Upload an Arena rankings CSV export to scan for duplicate account violations</p>
+  </div>
+
+  <div class="info-banner">
+    <strong>Expected columns:</strong>
+    <code>Middleware User ID</code> <code>Middleware Account ID</code> <code>User Email</code>
+    <code>Arena Name</code> <code>First Name</code> <code>Last Name</code> <code>Country</code> <code>Net PNL</code><br>
+    Export from Looker → NT Arena Rankings (Production Table) → filter by competition → download CSV.
+  </div>
+
+  <div class="signals-grid">
+    <div class="signal-card">
+      <div class="signal-label">Signal 1</div>
+      <div class="signal-desc">Same User ID, different Account IDs</div>
+    </div>
+    <div class="signal-card">
+      <div class="signal-label">Signal 2</div>
+      <div class="signal-desc">Same email, different User IDs</div>
+    </div>
+    <div class="signal-card">
+      <div class="signal-label">Signal 3</div>
+      <div class="signal-desc">Numbered email variants<br>(name0@, name1@, name2@…)</div>
+    </div>
+    <div class="signal-card">
+      <div class="signal-label">Signal 4</div>
+      <div class="signal-desc">Exact first + last name, same country, different IDs</div>
+    </div>
+    <div class="signal-card">
+      <div class="signal-label">Signal 5</div>
+      <div class="signal-desc">Duplicate rows — same user + account (Looker artifact)</div>
+    </div>
+    <div class="signal-card">
+      <div class="signal-label">Signal 6</div>
+      <div class="signal-desc">Shared name tokens + same country<br>(catches split/reordered names)</div>
+    </div>
+  </div>
+
+  <div id="uploadZone" class="upload-zone">
+    <input type="file" id="fileInput" accept=".csv" onchange="handleFile(event)">
+    <div style="font-size:26px;margin-bottom:8px;">📂</div>
+    <div class="upload-title">Drop CSV here or click to browse</div>
+    <div class="upload-sub">Looker Arena Rankings export · <span>CSV format</span></div>
+  </div>
+
+  <div id="fileLoaded" class="file-loaded" style="display:none;">
+    <span style="font-size:20px;">✅</span>
+    <div class="file-info">
+      <div class="file-name" id="fileName"></div>
+      <div class="file-meta" id="fileMeta"></div>
+    </div>
+    <button class="clear-btn" onclick="clearFile()">Clear</button>
+  </div>
+
+  <button class="scan-btn" id="scanBtn" onclick="runScan()" disabled>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    Run Disqualification Scan
+  </button>
+
+  <div class="status-bar">
+    <div class="dot" id="statusDot"></div>
+    <span id="statusText">Upload a CSV file to begin.</span>
+  </div>
+
+  <div id="resultsArea" style="display:none;">
+    <div class="summary-grid">
+      <div class="stat-card">
+        <div class="stat-num red" id="statDQ">0</div>
+        <div class="stat-label">Confirmed Disqualification</div>
+        <div class="stat-sub">Signals 1, 2, 3</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num yellow" id="statReview">0</div>
+        <div class="stat-label">Needs Review</div>
+        <div class="stat-sub">Signals 4, 6</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num blue" id="statArtifact">0</div>
+        <div class="stat-label">Data Artifacts</div>
+        <div class="stat-sub">Signal 5 — Looker dupes</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num muted" id="statTotal">0</div>
+        <div class="stat-label">Unique Entries</div>
+        <div class="stat-sub">After deduplication</div>
+      </div>
+    </div>
+
+    <div class="results-actions">
+      <button class="export-btn" onclick="exportCSV()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Export Disqualification Report CSV
+      </button>
+      <button class="copy-btn" onclick="copyReport()">Copy Summary</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('dq',this)">Confirmed Disqualification <span class="tab-count red" id="tcDQ">0</span></button>
+      <button class="tab" onclick="showTab('review',this)">Needs Review <span class="tab-count yellow" id="tcReview">0</span></button>
+      <button class="tab" onclick="showTab('artifact',this)">Data Artifacts <span class="tab-count blue" id="tcArtifact">0</span></button>
+    </div>
+
+    <div id="tab-dq" class="tab-panel active"><div id="dqList"></div></div>
+    <div id="tab-review" class="tab-panel">
+      <div class="info-banner" style="margin-bottom:16px;">
+        These entries share strong name similarity + country with a different User ID. Verify in Middleware before disqualifying.
+        <strong>Signal 6 (name token overlap)</strong> catches split/reordered names like "Carlos Manuel Benites" vs "Carlos Manuel Jesus Benites Ninahuaman".
+      </div>
+      <div id="reviewList"></div>
+    </div>
+    <div id="tab-artifact" class="tab-panel">
+      <div class="info-banner" style="margin-bottom:16px;">
+        Same User ID + Account ID appearing multiple times. <strong>Looker reporting artifact, not cheating.</strong> Flag to the Data Team to fix the dashboard query. Deduplicate before reporting participant counts.
+      </div>
+      <div id="artifactList"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let parsedData = [], scanResults = {};
+
+function handleFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    parsedData = parseCSV(ev.target.result);
+    document.getElementById('uploadZone').style.display = 'none';
+    document.getElementById('fileLoaded').style.display = 'flex';
+    document.getElementById('fileName').textContent = file.name;
+    document.getElementById('fileMeta').textContent = `${parsedData.length.toLocaleString()} rows · ${(file.size/1024).toFixed(1)} KB`;
+    document.getElementById('scanBtn').disabled = false;
+    setStatus('', `${parsedData.length.toLocaleString()} entries loaded. Ready to scan.`);
+  };
+  reader.readAsText(file);
+}
+
+function clearFile() {
+  parsedData = []; scanResults = {};
+  document.getElementById('uploadZone').style.display = 'block';
+  document.getElementById('fileLoaded').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+  document.getElementById('scanBtn').disabled = true;
+  document.getElementById('resultsArea').style.display = 'none';
+  setStatus('', 'Upload a CSV file to begin.');
+}
+
+function parseCSV(text) {
+  const lines = text.split('\n').filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h => h.trim().replace(/\r/g,''));
+  return lines.slice(1).map(line => {
+    const vals = []; let cur = '', inQ = false;
+    for (const c of line) {
+      if (c === '"') { inQ = !inQ; }
+      else if (c === ',' && !inQ) { vals.push(cur.trim()); cur = ''; }
+      else cur += c;
+    }
+    vals.push(cur.trim().replace(/\r/g,''));
+    const obj = {};
+    headers.forEach((h,i) => obj[h] = vals[i] || '');
+    return obj;
+  }).filter(r => r['Middleware User ID']);
+}
+
+// ---- Helpers ----
+function emailBase(e) {
+  return (e.split('@')[0] || '').toLowerCase().replace(/\d+/g,'');
+}
+function emailDomain(e) { return (e.split('@')[1] || '').toLowerCase(); }
+
+function nameTokens(name) {
+  const stop = new Set(['de','la','los','las','el','al','del','dos','das','da','di','le','van','von','bin','the','and']);
+  return new Set(name.toLowerCase().split(/\s+/).filter(t => t.length > 2 && !stop.has(t)));
+}
+
+function setIntersection(a, b) {
+  return new Set([...a].filter(x => b.has(x)));
+}
+
+// ---- Main analysis ----
+function runScan() {
+  if (!parsedData.length) return;
+  setStatus('active', `Scanning ${parsedData.length.toLocaleString()} entries across 6 signals...`);
+  document.getElementById('scanBtn').disabled = true;
+  setTimeout(() => {
+    scanResults = analyze(parsedData);
+    renderResults(scanResults);
+    document.getElementById('scanBtn').disabled = false;
+  }, 80);
+}
+
+function analyze(rows) {
+  const dq = [], review = [], artifacts = [];
+  const confirmedUIDs = new Set();
+
+  // --- SIGNAL 1: Same User ID, different Account ID ---
+  const byUID = {};
+  rows.forEach(r => {
+    const uid = r['Middleware User ID'];
+    if (!byUID[uid]) byUID[uid] = [];
+    byUID[uid].push(r);
+  });
+  Object.entries(byUID).forEach(([uid, entries]) => {
+    const accts = [...new Set(entries.map(e => e['Middleware Account ID']))];
+    if (accts.length > 1) {
+      confirmedUIDs.add(String(uid));
+      const deduped = accts.map(a => entries.find(e => e['Middleware Account ID'] === a));
+      dq.push({
+        title: `${deduped[0]['Arena Name'] || deduped[0]['First Name']} — ${accts.length} accounts, 1 user`,
+        signal: 'Signal 1: Same Middleware User ID, multiple Account IDs',
+        reason: `User ID ${uid} is linked to ${accts.length} different Account IDs. One person with multiple competing accounts — no IP check needed.`,
+        action: `Disqualify all accounts for User ID ${uid}.`,
+        entries: deduped
+      });
+    }
+  });
+
+  // Deduplicate to one row per user ID for remaining signals
+  const seenUID = new Set();
+  const unique = rows.filter(r => {
+    if (seenUID.has(r['Middleware User ID'])) return false;
+    seenUID.add(r['Middleware User ID']); return true;
+  });
+
+  // --- SIGNAL 2: Same email, different User ID ---
+  const byEmail = {};
+  unique.forEach(r => {
+    const e = (r['User Email'] || '').toLowerCase().trim();
+    if (!e) return;
+    if (!byEmail[e]) byEmail[e] = [];
+    byEmail[e].push(r);
+  });
+  Object.entries(byEmail).forEach(([email, entries]) => {
+    const uids = [...new Set(entries.map(e => e['Middleware User ID']))];
+    if (uids.length > 1 && !uids.some(u => confirmedUIDs.has(String(u)))) {
+      uids.forEach(u => confirmedUIDs.add(String(u)));
+      dq.push({
+        title: `${email} — ${uids.length} separate user accounts`,
+        signal: 'Signal 2: Same email address, multiple User IDs',
+        reason: `Email ${email} appears under ${uids.length} separate Middleware User IDs. Same person using multiple NT logins.`,
+        action: `Verify both accounts in Middleware and disqualify all entries.`,
+        entries: entries
+      });
+    }
+  });
+
+  // --- SIGNAL 3: Numbered email variants (base+number@domain) ---
+  const byEmailKey = {};
+  unique.forEach(r => {
+    if (confirmedUIDs.has(String(r['Middleware User ID']))) return;
+    const email = (r['User Email'] || '').toLowerCase().trim();
+    if (!email) return;
+    const base = emailBase(email);
+    const domain = emailDomain(email);
+    if (!base || base.length < 4) return;
+    const key = base + '@' + domain;
+    if (!byEmailKey[key]) byEmailKey[key] = [];
+    byEmailKey[key].push(r);
+  });
+  Object.entries(byEmailKey).forEach(([key, entries]) => {
+    const uniqEmails = [...new Set(entries.map(e => e['User Email'].toLowerCase()))];
+    const uids = [...new Set(entries.map(e => e['Middleware User ID']))];
+    if (uniqEmails.length > 1 && uids.length > 1) {
+      uids.forEach(u => confirmedUIDs.add(String(u)));
+      dq.push({
+        title: `${key} — ${uids.length} numbered variants`,
+        signal: 'Signal 3: Numbered email variants (same base, different number suffix)',
+        reason: `${uids.length} accounts share the same email base with numeric suffixes: ${uniqEmails.join(', ')}`,
+        action: `Disqualify all accounts. Check Middleware for shared IP or device fingerprint.`,
+        entries: entries
+      });
+    }
+  });
+
+  // --- SIGNAL 4: Exact full name + country, different User IDs ---
+  const byNameCountry = {};
+  unique.forEach(r => {
+    if (confirmedUIDs.has(String(r['Middleware User ID']))) return;
+    const first = (r['First Name'] || '').toLowerCase().trim();
+    const last = (r['Last Name'] || '').toLowerCase().trim();
+    const country = (r['Country'] || '').trim();
+    if (!first || !last || !country) return;
+    const key = `${country}||${first} ${last}`;
+    if (!byNameCountry[key]) byNameCountry[key] = [];
+    byNameCountry[key].push(r);
+  });
+  Object.entries(byNameCountry).forEach(([key, entries]) => {
+    const uids = [...new Set(entries.map(e => e['Middleware User ID']))];
+    if (uids.length > 1) {
+      const [country, name] = key.split('||');
+      const isCommon = isCommonName(name);
+      review.push({
+        title: `${name} (${country.toUpperCase()}) — ${uids.length} accounts`,
+        signal: `Signal 4: Exact full name + country match${isCommon ? ' — common name, verify carefully' : ''}`,
+        reason: `"${name}" appears under ${uids.length} different User IDs in ${country}.${isCommon ? ' Common name — confirm in Middleware before disqualifying.' : ''}`,
+        action: `Check Middleware for shared IP, device, or sequential account creation.`,
+        entries: entries,
+        priority: isCommon ? 1 : 0
+      });
+    }
+  });
+
+  // --- SIGNAL 5: Duplicate rows (same UID + Account ID) — Looker artifact ---
+  const rowKey = {};
+  rows.forEach(r => {
+    const k = `${r['Middleware User ID']}__${r['Middleware Account ID']}`;
+    if (!rowKey[k]) rowKey[k] = [];
+    rowKey[k].push(r);
+  });
+  Object.values(rowKey).forEach(entries => {
+    if (entries.length > 1 && !confirmedUIDs.has(String(entries[0]['Middleware User ID']))) {
+      artifacts.push({
+        title: `${entries[0]['Arena Name']} — appears ${entries.length}× in export`,
+        signal: 'Signal 5: Duplicate rows, same User ID + Account ID',
+        reason: `UID ${entries[0]['Middleware User ID']} / Account ${entries[0]['Middleware Account ID']} appears ${entries.length} times with identical data. Looker export issue.`,
+        action: `Not a disqualification. Flag to the Data Team — deduplicate before reporting participant counts.`,
+        entries: [entries[0]]
+      });
+    }
+  });
+
+  // --- SIGNAL 6: Name token overlap, same country ---
+  // Catches split/reordered/extended names like Carlos Manuel vs Carlos Manuel Jesus ...Ninahuaman
+  // Also catches name swaps like Rainer Rodriguez / RainerR Rodriguez monegro
+  const byCountry = {};
+  unique.forEach(r => {
+    if (confirmedUIDs.has(String(r['Middleware User ID']))) return;
+    const country = (r['Country'] || '').trim();
+    if (!country || country === 'nan') return;
+    if (!byCountry[country]) byCountry[country] = [];
+    byCountry[country].push(r);
+  });
+
+  const sig6seen = new Set();
+  Object.entries(byCountry).forEach(([country, countryRows]) => {
+    if (countryRows.length > 300) return; // skip very large countries for performance
+    for (let i = 0; i < countryRows.length; i++) {
+      for (let j = i + 1; j < countryRows.length; j++) {
+        const a = countryRows[i], b = countryRows[j];
+        const uidA = String(a['Middleware User ID']), uidB = String(b['Middleware User ID']);
+        if (uidA === uidB) continue;
+        if (confirmedUIDs.has(uidA) || confirmedUIDs.has(uidB)) continue;
+
+        const nameA = `${(a['First Name']||'')} ${(a['Last Name']||'')}`.toLowerCase().trim();
+        const nameB = `${(b['First Name']||'')} ${(b['Last Name']||'')}`.toLowerCase().trim();
+        if (!nameA || !nameB || nameA.split(' ').length < 2 || nameB.split(' ').length < 2) continue;
+
+        const tokA = nameTokens(nameA);
+        const tokB = nameTokens(nameB);
+        if (tokA.size < 2 || tokB.size < 2) continue;
+
+        const shared = setIntersection(tokA, tokB);
+        const shorter = Math.min(tokA.size, tokB.size);
+        const ratio = shared.size / shorter;
+
+        // Require: at least 2 shared tokens AND >= 60% of shorter name matches
+        // AND not already an exact-match catch (Signal 4 handles those)
+        if (shared.size >= 2 && ratio >= 0.60 && nameA !== nameB) {
+          const pairKey = [uidA, uidB].sort().join('||');
+          if (sig6seen.has(pairKey)) continue;
+          sig6seen.add(pairKey);
+
+          // Avoid duplicating Signal 4 catches
+          const alreadyInReview = review.some(r =>
+            r.entries.some(e => String(e['Middleware User ID']) === uidA) &&
+            r.entries.some(e => String(e['Middleware User ID']) === uidB)
+          );
+          if (alreadyInReview) continue;
+
+          const sharedStr = [...shared].join(', ');
+          review.push({
+            title: `"${nameA}" / "${nameB}" (${country.toUpperCase()})`,
+            signal: `Signal 6: Name token overlap — shared: ${sharedStr}`,
+            reason: `Two accounts in ${country} share name components [${sharedStr}] but have different User IDs and emails. Likely the same person using slight name variations to avoid detection.`,
+            action: `Compare Middleware User IDs ${uidA} and ${uidB} — check IP addresses, account creation date proximity, and trading patterns.`,
+            entries: [a, b],
+            priority: ratio >= 0.85 ? 0 : 1
+          });
+        }
+      }
+    }
+  });
+
+  // Sort review: highest priority (0) first
+  review.sort((a,b) => (a.priority||0) - (b.priority||0));
+
+  const uniqueCount = Object.keys(rowKey).length;
+  return { dq, review, artifacts, totalRows: rows.length, uniqueCount };
+}
+
+function isCommonName(name) {
+  const common = new Set([
+    'john smith','james brown','michael johnson','david garcia','jose garcia',
+    'jose martinez','carlos garcia','daniel garcia','david kim','jane doe',
+    'john patterson','kevin toth','matt ogle','michelle brown','sam green',
+    'luis diaz','ivan hernandez','carlos martinez','isaiah thomas','kemar williams',
+    'abdikarim mohamed','abdulahi farah','dominick pierre','eduardo martinez',
+    'ghislain agbalinhouto','kenneth mercury','leonardo moyses','oscar diaz-reyes',
+    'sebastian dean','zach schweitzer','john wardwell','dustin gilmore','nitish kumar'
+  ]);
+  return common.has(name.toLowerCase());
+}
+
+function renderResults(r) {
+  document.getElementById('statDQ').textContent = r.dq.length;
+  document.getElementById('statReview').textContent = r.review.length;
+  document.getElementById('statArtifact').textContent = r.artifacts.length;
+  document.getElementById('statTotal').textContent = r.uniqueCount.toLocaleString();
+  document.getElementById('tcDQ').textContent = r.dq.length;
+  document.getElementById('tcReview').textContent = r.review.length;
+  document.getElementById('tcArtifact').textContent = r.artifacts.length;
+  renderList('dqList', r.dq, 'dq');
+  renderList('reviewList', r.review, 'review');
+  renderList('artifactList', r.artifacts, 'artifact');
+  document.getElementById('resultsArea').style.display = 'block';
+  setStatus('done', `Scan complete — ${r.dq.length} confirmed disqualifications, ${r.review.length} need review, ${r.artifacts.length} data artifacts.`);
+}
+
+function renderList(id, items, type) {
+  const el = document.getElementById(id);
+  if (!items.length) {
+    el.innerHTML = `<div class="empty-state">No ${type==='dq'?'confirmed disqualification violations':type==='review'?'entries needing review':'data artifacts'} found.</div>`;
+    return;
+  }
+  const badgeLabel = {dq:'Confirmed Disqualification',review:'Needs Review',artifact:'Data Artifact'}[type];
+  const cols = ['Arena Name','Middleware User ID','Middleware Account ID','User Email','Country','Net PNL'];
+  el.innerHTML = items.map(item => {
+    const ths = cols.map(c => `<th>${c}</th>`).join('');
+    const trs = item.entries.map(e => {
+      const pnl = parseFloat(e['Net PNL']);
+      const pnlStr = e['Net PNL']
+        ? `<span class="${pnl>=0?'pnl-pos':'pnl-neg'}">${pnl>=0?'+':''}${pnl.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>`
+        : '<span style="color:var(--text-muted)">—</span>';
+      return `<tr>
+        <td>${e['Arena Name']||'—'}</td>
+        <td style="font-family:monospace">${e['Middleware User ID']||'—'}</td>
+        <td style="font-family:monospace">${e['Middleware Account ID']||'—'}</td>
+        <td>${e['User Email']||'—'}</td>
+        <td>${e['Country']||'—'}</td>
+        <td>${pnlStr}</td>
+      </tr>`;
+    }).join('');
+    return `<div class="flag-card">
+      <div class="flag-header">
+        <div><div class="flag-title">${item.title}</div><div class="flag-signal">${item.signal}</div></div>
+        <div class="badge ${type}">${badgeLabel}</div>
+      </div>
+      <div class="flag-reason">${item.reason}</div>
+      <table class="entries-table"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>
+      <div class="flag-action">${item.action}</div>
+    </div>`;
+  }).join('');
+}
+
+function showTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(`tab-${name}`).classList.add('active');
+}
+
+function setStatus(type, text) {
+  const dot = document.getElementById('statusDot');
+  dot.className = 'dot';
+  if (type==='active') dot.classList.add('active');
+  if (type==='done') dot.classList.add('done');
+  if (type==='error') dot.classList.add('error');
+  document.getElementById('statusText').textContent = text;
+}
+
+function exportCSV() {
+  if (!scanResults.dq) return;
+  const cols = ['Category','Signal','Arena Name','Middleware User ID','Middleware Account ID','User Email','Country','Net PNL','Action'];
+  const rows = [cols.join(',')];
+  [...scanResults.dq.map(i=>({...i,cat:'Confirmed Disqualification'})),
+   ...scanResults.review.map(i=>({...i,cat:'Needs Review'})),
+   ...scanResults.artifacts.map(i=>({...i,cat:'Data Artifact'}))
+  ].forEach(item => {
+    item.entries.forEach(e => {
+      rows.push([
+        item.cat, `"${item.signal}"`,
+        `"${e['Arena Name']||''}"`, e['Middleware User ID']||'',
+        e['Middleware Account ID']||'', `"${e['User Email']||''}"`,
+        e['Country']||'', e['Net PNL']||'',
+        `"${item.action.replace(/"/g,"'")}"`
+      ].join(','));
+    });
+  });
+  const blob = new Blob([rows.join('\n')], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `arena-dq-report-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+function copyReport() {
+  if (!scanResults.dq) return;
+  const r = scanResults;
+  let txt = `ARENA DISQUALIFICATION SCAN REPORT — ${new Date().toLocaleString()}\n`;
+  txt += `Rows: ${r.totalRows} | Unique: ${r.uniqueCount} | Disqualifications: ${r.dq.length} | Review: ${r.review.length} | Artifacts: ${r.artifacts.length}\n\n`;
+  txt += `--- CONFIRMED DISQUALIFICATION (${r.dq.length}) ---\n`;
+  r.dq.forEach(i => { txt += `• ${i.title}\n  ${i.signal}\n  → ${i.action}\n\n`; });
+  txt += `--- NEEDS REVIEW (${r.review.length}) ---\n`;
+  r.review.forEach(i => { txt += `• ${i.title}\n  ${i.signal}\n  → ${i.action}\n\n`; });
+  navigator.clipboard.writeText(txt).then(() => {
+    const btn = document.querySelector('.copy-btn');
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(()=>btn.textContent=orig, 2000);
+  });
+}
+
+// Drag and drop
+const zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+zone.addEventListener('drop', e => {
+  e.preventDefault(); zone.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.name.endsWith('.csv')) {
+    document.getElementById('fileInput').files = e.dataTransfer.files;
+    handleFile({target:{files:[file]}});
+  }
+});
+</script>
+</body>
+</html>
