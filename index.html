@@ -96,6 +96,19 @@
   .tab-panel{display:none;}
   .tab-panel.active{display:block;}
   .pnl-pos{color:var(--green);} .pnl-neg{color:var(--red);}
+  .conf-wrap{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-top:2px;}
+  .conf-bar{width:60px;height:6px;border-radius:3px;background:var(--surface2);overflow:hidden;position:relative;}
+  .conf-fill{height:100%;border-radius:3px;transition:width .3s;}
+  .conf-pct{font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;min-width:32px;text-align:right;}
+  .conf-high{color:var(--red);} .conf-high .conf-fill{background:var(--red);}
+  .conf-med{color:var(--yellow);} .conf-med .conf-fill{background:var(--yellow);}
+  .conf-low{color:var(--text-muted);} .conf-low .conf-fill{background:var(--text-muted);}
+  .conf-tooltip{position:relative;cursor:help;}
+  .conf-tooltip:hover .conf-detail{display:block;}
+  .conf-detail{display:none;position:absolute;right:0;top:100%;margin-top:6px;background:#1a1a1a;border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:11px;color:var(--text-secondary);line-height:1.6;white-space:nowrap;z-index:50;box-shadow:0 4px 12px rgba(0,0,0,.5);min-width:280px;}
+  .conf-detail li{list-style:none;padding-left:0;}
+  .conf-detail li::before{content:'• ';color:var(--accent);}
+  .version-tag{font-size:11px;color:var(--text-muted);}
 </style>
 </head>
 <body>
@@ -106,7 +119,10 @@
     <div class="topbar-div"></div>
     <span class="topbar-title">Arena Disqualification (DQ) Scanner</span>
   </div>
-  <div class="pill">Internal Tool</div>
+  <div style="display:flex;align-items:center;gap:12px;">
+    <span class="version-tag">v2.0 — 2026-03-25</span>
+    <div class="pill">Internal Tool</div>
+  </div>
 </div>
 
 <div class="main">
@@ -304,6 +320,11 @@ function runScan() {
   }, 80);
 }
 
+function hasPnL(entry) {
+  const pnl = parseFloat(entry['Net PNL']);
+  return !isNaN(pnl) && pnl !== 0;
+}
+
 function analyze(rows) {
   const dq = [], review = [], artifacts = [];
   const confirmedUIDs = new Set();
@@ -318,12 +339,14 @@ function analyze(rows) {
   Object.entries(byUID).forEach(([uid, entries]) => {
     const accts = [...new Set(entries.map(e => e['Middleware Account ID']))];
     if (accts.length > 1) {
-      confirmedUIDs.add(String(uid));
       const deduped = accts.map(a => entries.find(e => e['Middleware Account ID'] === a));
+      const acctsWithPnL = deduped.filter(e => hasPnL(e));
+      if (acctsWithPnL.length < 2) return;
+      confirmedUIDs.add(String(uid));
       dq.push({
-        title: `${deduped[0]['Arena Name'] || deduped[0]['First Name']} — ${accts.length} accounts, 1 user`,
-        signal: 'Signal 1: Same Middleware User ID, multiple Account IDs',
-        reason: `User ID ${uid} is linked to ${accts.length} different Account IDs. One person with multiple competing accounts — no IP check needed.`,
+        title: `${deduped[0]['Arena Name'] || deduped[0]['First Name']} — ${acctsWithPnL.length} active accounts, 1 user`,
+        signal: 'Signal 1: Same Middleware User ID, multiple Account IDs with PnL',
+        reason: `User ID ${uid} is linked to ${accts.length} Account IDs, ${acctsWithPnL.length} of which have PnL. One person actively trading from multiple accounts.`,
         action: `Disqualify all accounts for User ID ${uid}.`,
         entries: deduped
       });
@@ -348,6 +371,8 @@ function analyze(rows) {
   Object.entries(byEmail).forEach(([email, entries]) => {
     const uids = [...new Set(entries.map(e => e['Middleware User ID']))];
     if (uids.length > 1 && !uids.some(u => confirmedUIDs.has(String(u)))) {
+      const entriesWithPnL = entries.filter(e => hasPnL(e));
+      if (entriesWithPnL.length < 2) return;
       uids.forEach(u => confirmedUIDs.add(String(u)));
       dq.push({
         title: `${email} — ${uids.length} separate user accounts`,
@@ -376,6 +401,8 @@ function analyze(rows) {
     const uniqEmails = [...new Set(entries.map(e => e['User Email'].toLowerCase()))];
     const uids = [...new Set(entries.map(e => e['Middleware User ID']))];
     if (uniqEmails.length > 1 && uids.length > 1) {
+      const entriesWithPnL = entries.filter(e => hasPnL(e));
+      if (entriesWithPnL.length < 2) return;
       uids.forEach(u => confirmedUIDs.add(String(u)));
       dq.push({
         title: `${key} — ${uids.length} numbered variants`,
@@ -402,6 +429,8 @@ function analyze(rows) {
   Object.entries(byNameCountry).forEach(([key, entries]) => {
     const uids = [...new Set(entries.map(e => e['Middleware User ID']))];
     if (uids.length > 1) {
+      const entriesWithPnL = entries.filter(e => hasPnL(e));
+      if (entriesWithPnL.length < 2) return;
       const [country, name] = key.split('||');
       const isCommon = isCommonName(name);
       review.push({
@@ -471,11 +500,11 @@ function analyze(rows) {
         // Require: at least 2 shared tokens AND >= 60% of shorter name matches
         // AND not already an exact-match catch (Signal 4 handles those)
         if (shared.size >= 2 && ratio >= 0.60 && nameA !== nameB) {
+          if (!hasPnL(a) || !hasPnL(b)) continue;
           const pairKey = [uidA, uidB].sort().join('||');
           if (sig6seen.has(pairKey)) continue;
           sig6seen.add(pairKey);
 
-          // Avoid duplicating Signal 4 catches
           const alreadyInReview = review.some(r =>
             r.entries.some(e => String(e['Middleware User ID']) === uidA) &&
             r.entries.some(e => String(e['Middleware User ID']) === uidB)
@@ -498,6 +527,81 @@ function analyze(rows) {
 
   // Sort review: highest priority (0) first
   review.sort((a,b) => (a.priority||0) - (b.priority||0));
+
+  // --- CONFIDENCE SCORING ---
+  const allUIDs = new Set();
+  const uidSignalMap = {};
+  const trackUID = (uid, sig) => {
+    if (!uidSignalMap[uid]) uidSignalMap[uid] = new Set();
+    uidSignalMap[uid].add(sig);
+  };
+
+  [...dq, ...review].forEach(item => {
+    const sig = item.signal.match(/Signal (\d)/)?.[1] || '?';
+    item.entries.forEach(e => {
+      const uid = String(e['Middleware User ID']);
+      allUIDs.add(uid);
+      trackUID(uid, sig);
+    });
+  });
+
+  const scoreItem = (item) => {
+    const sig = item.signal.match(/Signal (\d)/)?.[1];
+    let base = 0;
+    const factors = [];
+
+    if (sig === '1') {
+      base = 95;
+      factors.push('System-confirmed: same User ID, multiple active accounts');
+    } else if (sig === '2') {
+      base = 90;
+      factors.push('Same email address across multiple User IDs');
+    } else if (sig === '3') {
+      base = 85;
+      factors.push('Deliberate numbered email pattern');
+    } else if (sig === '4') {
+      const isCommon = item.signal.includes('common name');
+      base = isCommon ? 30 : 60;
+      factors.push(isCommon ? 'Common name — high false-positive risk' : 'Exact name + country match');
+    } else if (sig === '6') {
+      const highOverlap = (item.priority || 1) === 0;
+      base = highOverlap ? 55 : 35;
+      factors.push(highOverlap ? 'Strong name token overlap (>=85%)' : 'Moderate name token overlap (60-84%)');
+    }
+
+    const uidsInItem = item.entries.map(e => String(e['Middleware User ID']));
+    const convergingSignals = new Set();
+    uidsInItem.forEach(uid => {
+      (uidSignalMap[uid] || new Set()).forEach(s => convergingSignals.add(s));
+    });
+    convergingSignals.delete(sig);
+    if (convergingSignals.size > 0) {
+      const boost = Math.min(convergingSignals.size * 12, 20);
+      base = Math.min(base + boost, 99);
+      factors.push(`+${boost}% — also flagged by Signal${convergingSignals.size > 1 ? 's' : ''} ${[...convergingSignals].join(', ')}`);
+    }
+
+    const pnlValues = item.entries.map(e => Math.abs(parseFloat(e['Net PNL']) || 0));
+    const avgPnL = pnlValues.reduce((a,b) => a+b, 0) / pnlValues.length;
+    if (avgPnL > 500) {
+      base = Math.min(base + 5, 99);
+      factors.push('+5% — significant PnL activity across flagged accounts');
+    }
+
+    if (sig === '4' || sig === '6') {
+      const emails = item.entries.map(e => emailDomain((e['User Email'] || '')));
+      if (emails.length >= 2 && new Set(emails).size === 1 && emails[0]) {
+        base = Math.min(base + 8, 99);
+        factors.push(`+8% — same email domain (${emails[0]})`);
+      }
+    }
+
+    item.confidence = Math.min(Math.max(base, 5), 99);
+    item.confidenceFactors = factors;
+  };
+
+  dq.forEach(scoreItem);
+  review.forEach(scoreItem);
 
   const uniqueCount = Object.keys(rowKey).length;
   return { dq, review, artifacts, totalRows: rows.length, uniqueCount };
@@ -555,10 +659,25 @@ function renderList(id, items, type) {
         <td>${pnlStr}</td>
       </tr>`;
     }).join('');
+    const conf = item.confidence || 0;
+    const confClass = conf >= 75 ? 'conf-high' : conf >= 45 ? 'conf-med' : 'conf-low';
+    const confLabel = conf >= 80 ? 'Very High' : conf >= 60 ? 'High' : conf >= 40 ? 'Moderate' : 'Low';
+    const factorsHtml = (item.confidenceFactors || []).map(f => `<li>${f}</li>`).join('');
+    const confHtml = type !== 'artifact' ? `
+      <div class="conf-tooltip ${confClass}">
+        <div class="conf-wrap">
+          <span class="conf-pct">${conf}%</span>
+          <div class="conf-bar"><div class="conf-fill" style="width:${conf}%"></div></div>
+        </div>
+        <div class="conf-detail"><strong style="color:var(--text);">Confidence: ${conf}% — ${confLabel}</strong><ul style="margin:4px 0 0;padding:0;">${factorsHtml}</ul></div>
+      </div>` : '';
     return `<div class="flag-card">
       <div class="flag-header">
         <div><div class="flag-title">${item.title}</div><div class="flag-signal">${item.signal}</div></div>
-        <div class="badge ${type}">${badgeLabel}</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          ${confHtml}
+          <div class="badge ${type}">${badgeLabel}</div>
+        </div>
       </div>
       <div class="flag-reason">${item.reason}</div>
       <table class="entries-table"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table>
@@ -585,7 +704,7 @@ function setStatus(type, text) {
 
 function exportCSV() {
   if (!scanResults.dq) return;
-  const cols = ['Category','Signal','Arena Name','Middleware User ID','Middleware Account ID','User Email','Country','Net PNL','Action'];
+  const cols = ['Category','Signal','Confidence %','Arena Name','Middleware User ID','Middleware Account ID','User Email','Country','Net PNL','Action'];
   const rows = [cols.join(',')];
   [...scanResults.dq.map(i=>({...i,cat:'Confirmed Disqualification'})),
    ...scanResults.review.map(i=>({...i,cat:'Needs Review'})),
@@ -594,6 +713,7 @@ function exportCSV() {
     item.entries.forEach(e => {
       rows.push([
         item.cat, `"${item.signal}"`,
+        item.confidence || '',
         `"${e['Arena Name']||''}"`, e['Middleware User ID']||'',
         e['Middleware Account ID']||'', `"${e['User Email']||''}"`,
         e['Country']||'', e['Net PNL']||'',
@@ -614,9 +734,9 @@ function copyReport() {
   let txt = `ARENA DISQUALIFICATION SCAN REPORT — ${new Date().toLocaleString()}\n`;
   txt += `Rows: ${r.totalRows} | Unique: ${r.uniqueCount} | Disqualifications: ${r.dq.length} | Review: ${r.review.length} | Artifacts: ${r.artifacts.length}\n\n`;
   txt += `--- CONFIRMED DISQUALIFICATION (${r.dq.length}) ---\n`;
-  r.dq.forEach(i => { txt += `• ${i.title}\n  ${i.signal}\n  → ${i.action}\n\n`; });
+  r.dq.forEach(i => { txt += `• ${i.title}  [Confidence: ${i.confidence}%]\n  ${i.signal}\n  → ${i.action}\n\n`; });
   txt += `--- NEEDS REVIEW (${r.review.length}) ---\n`;
-  r.review.forEach(i => { txt += `• ${i.title}\n  ${i.signal}\n  → ${i.action}\n\n`; });
+  r.review.forEach(i => { txt += `• ${i.title}  [Confidence: ${i.confidence}%]\n  ${i.signal}\n  → ${i.action}\n\n`; });
   navigator.clipboard.writeText(txt).then(() => {
     const btn = document.querySelector('.copy-btn');
     const orig = btn.textContent;
