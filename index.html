@@ -99,7 +99,7 @@
   .conf-wrap{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-top:2px;}
   .conf-bar{width:60px;height:6px;border-radius:3px;background:var(--surface2);overflow:hidden;position:relative;}
   .conf-fill{height:100%;border-radius:3px;transition:width .3s;}
-  .conf-pct{font-size:11px;font-weight:600;font-variant-numeric:tabular-nums;min-width:32px;text-align:right;}
+  .conf-pct{font-size:11px;font-weight:600;min-width:auto;text-align:right;white-space:nowrap;}
   .conf-high{color:var(--red);} .conf-high .conf-fill{background:var(--red);}
   .conf-med{color:var(--yellow);} .conf-med .conf-fill{background:var(--yellow);}
   .conf-low{color:var(--text-muted);} .conf-low .conf-fill{background:var(--text-muted);}
@@ -666,10 +666,10 @@ function renderList(id, items, type) {
     const confHtml = type !== 'artifact' ? `
       <div class="conf-tooltip ${confClass}">
         <div class="conf-wrap">
-          <span class="conf-pct">${conf}%</span>
+          <span class="conf-pct">${confLabel}</span>
           <div class="conf-bar"><div class="conf-fill" style="width:${conf}%"></div></div>
         </div>
-        <div class="conf-detail"><strong style="color:var(--text);">Confidence: ${conf}% — ${confLabel}</strong><ul style="margin:4px 0 0;padding:0;">${factorsHtml}</ul></div>
+        <div class="conf-detail"><strong style="color:var(--text);">Evidence Strength: ${confLabel}</strong><ul style="margin:4px 0 0;padding:0;">${factorsHtml}</ul></div>
       </div>` : '';
     return `<div class="flag-card">
       <div class="flag-header">
@@ -704,7 +704,7 @@ function setStatus(type, text) {
 
 function exportCSV() {
   if (!scanResults.dq) return;
-  const cols = ['Category','Signal','Confidence %','Arena Name','Middleware User ID','Middleware Account ID','User Email','Country','Net PNL','Action'];
+  const cols = ['Category','Signal','Evidence Strength','Arena Name','Middleware User ID','Middleware Account ID','User Email','Country','Net PNL','Action'];
   const rows = [cols.join(',')];
   [...scanResults.dq.map(i=>({...i,cat:'Confirmed Disqualification'})),
    ...scanResults.review.map(i=>({...i,cat:'Needs Review'})),
@@ -713,7 +713,7 @@ function exportCSV() {
     item.entries.forEach(e => {
       rows.push([
         item.cat, `"${item.signal}"`,
-        item.confidence || '',
+        item.confidence >= 80 ? 'Very High' : item.confidence >= 60 ? 'High' : item.confidence >= 40 ? 'Moderate' : 'Low',
         `"${e['Arena Name']||''}"`, e['Middleware User ID']||'',
         e['Middleware Account ID']||'', `"${e['User Email']||''}"`,
         e['Country']||'', e['Net PNL']||'',
@@ -734,9 +734,10 @@ function copyReport() {
   let txt = `ARENA DISQUALIFICATION SCAN REPORT — ${new Date().toLocaleString()}\n`;
   txt += `Rows: ${r.totalRows} | Unique: ${r.uniqueCount} | Disqualifications: ${r.dq.length} | Review: ${r.review.length} | Artifacts: ${r.artifacts.length}\n\n`;
   txt += `--- CONFIRMED DISQUALIFICATION (${r.dq.length}) ---\n`;
-  r.dq.forEach(i => { txt += `• ${i.title}  [Confidence: ${i.confidence}%]\n  ${i.signal}\n  → ${i.action}\n\n`; });
+  const strengthLabel = (c) => c >= 80 ? 'Very High' : c >= 60 ? 'High' : c >= 40 ? 'Moderate' : 'Low';
+  r.dq.forEach(i => { txt += `• ${i.title}  [Evidence: ${strengthLabel(i.confidence)}]\n  ${i.signal}\n  → ${i.action}\n\n`; });
   txt += `--- NEEDS REVIEW (${r.review.length}) ---\n`;
-  r.review.forEach(i => { txt += `• ${i.title}  [Confidence: ${i.confidence}%]\n  ${i.signal}\n  → ${i.action}\n\n`; });
+  r.review.forEach(i => { txt += `• ${i.title}  [Evidence: ${strengthLabel(i.confidence)}]\n  ${i.signal}\n  → ${i.action}\n\n`; });
   navigator.clipboard.writeText(txt).then(() => {
     const btn = document.querySelector('.copy-btn');
     const orig = btn.textContent;
